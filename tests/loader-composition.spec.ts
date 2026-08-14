@@ -1,0 +1,261 @@
+// Real Loader composition through cordis.yml: the recall tool must boot through
+// the same loader path a deployment uses, and its model-facing schema plus the
+// executed behavior — keyword search, exact seq reads, compaction-shadowed
+// surface filtering, and the current-step cap — must hold end to end.
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { afterEach, describe, expect, it } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
+import Include from '@deepseek-ai/cordis-plugin-include'
+import { CompactionId } from '@deepseek-ai/dsh-compaction'
+import { CallId, MessageId } from '@deepseek-ai/dsh-llm'
+import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import * as ToolRecall from '../src/index.ts'
+
+let root: string | undefined
+let context: Context | undefined
+
+afterEach(async () => {
+  await context?.fiber.dispose()
+  context = undefined
+  if (root !== undefined) await rm(root, { recursive: true, force: true })
+  root = undefined
+})
+
+function agent(ctx: Context, session: Session): Agent {
+  const scope = ctx.plugin(() => {})
+  const value: Agent = {
+    id: session.id, options: {}, session, inbox: new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} }),
+    status: 'idle', ctx: scope.ctx,
+    followup: () => {}, steer: () => {}, inject: () => {}, send: () => {}, cancel() {},
+    runMaintenance: task => task(new AbortController().signal),
+    whenIdle: () => Promise.resolve(),
+  }
+  ctx.agents.register(value)
+  return value
+}
+
+function resultText(result: { content: { type: string; text?: string }[] }): string {
+  return result.content.filter(block => block.type === 'text').map(block => block.text).join('')
+}
+
+/**
+ * A compaction-shaped session log: pre-compaction Q/A shadowed by a checkpoint
+ * replacement, then a fresh step with an in-flight user message. Mirrors the
+ * `compactSurfaceRegion()` transaction event order.
+ */
+function seededSession(): Session {
+  const seed: SessionEvent[] = [
+    {
+      type: 'user/message', seq: 0, time: 1,
+      data: {
+        role: 'user', id: MessageId('msg-0'),
+        source: { kind: 'user' },
+        content: [{ type: 'text', text: 'pre-compaction user question about recall' }],
+      },
+      surfaceOp: 'append',
+    },
+    {
+      type: 'assistant/message', seq: 1, time: 2,
+      data: {
+        turn: 1, step: 1,
+        message: {
+          role: 'assistant', id: MessageId('msg-1'),
+          source: { kind: 'model', provider: 'test-provider', model: 'test-model' },
+          content: [{ type: 'text', text: 'pre-compaction answer' }],
+        },
+      },
+      surfaceOp: 'append',
+    },
+    {
+      type: 'compaction/start', seq: 2, time: 3,
+      data: { compactionId: CompactionId('recall-test'), turn: null },
+    },
+    {
+      type: 'compaction/summary', seq: 3, time: 4,
+      data: {
+        compactionId: CompactionId('recall-test'),
+        summary: [{ type: 'text', text: 'checkpoint summary' }],
+        shadowedRange: { start: 0, end: 1 },
+        shadowedSeqs: [0, 1],
+        shadowedTokenCount: 42,
+        provider: 'test-provider',
+        model: 'test-model',
+      },
+    },
+    {
+      type: 'user/message', seq: 4, time: 5,
+      data: {
+        role: 'user', id: MessageId('msg-4'),
+        source: { kind: 'user' },
+        content: [{ type: 'text', text: 'checkpoint summary text' }],
+      },
+      surfaceOp: { op: 'replace', start: 0, end: 1 },
+      sourceEventSeqs: [2, 3, 0, 1],
+    },
+    {
+      type: 'compaction/end', seq: 5, time: 6,
+      data: { compactionId: CompactionId('recall-test'), turn: null },
+    },
+    { type: 'step/start', seq: 6, time: 7, data: { turn: 1, step: 2 } },
+    {
+      type: 'user/message', seq: 7, time: 8,
+      data: {
+        role: 'user', id: MessageId('msg-7'),
+        source: { kind: 'user' },
+        content: [{ type: 'text', text: 'in-flight question of the current step' }],
+      },
+      surfaceOp: 'append',
+    },
+  ]
+  return Session.create(SessionId('recall-loader-agent'), seed)
+}
+
+async function boot(): Promise<Context> {
+  root = await mkdtemp(join(tmpdir(), 'dsh-recall-loader-'))
+  const configPath = join(root, 'cordis.yml')
+  await writeFile(configPath, [
+    "- name: '@deepseek-ai/dsh-agent'",
+    "- name: '@deepseek-ai/dsh-system-prompt'",
+    "- name: '@deepseek-ai/dsh-tools'",
+    "- name: 'dsh-recall'",
+    '  config:',
+    '    maxResults: 10',
+    '    maxCharsPerEvent: 200',
+    '',
+  ].join('\n'))
+
+  const ctx = new Context()
+  context = ctx
+  ctx.baseUrl = pathToFileURL(root).href + '/'
+  await ctx.plugin(Loader)
+  ctx.loader.builtins.include = Include
+  const modules = new Map<string, unknown>([
+    ['@deepseek-ai/dsh-agent', AgentRegistry],
+    ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
+    ['@deepseek-ai/dsh-tools', ToolRuntime],
+    ['dsh-recall', ToolRecall],
+  ])
+  ctx.loader.internal = {
+    version: 'v2',
+    async import(specifier: string) {
+      if (!modules.has(specifier)) throw new Error(`unexpected Loader import: ${specifier}`)
+      return modules.get(specifier)
+    },
+  } as unknown as NonNullable<typeof ctx.loader.internal>
+  await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
+  await ctx.loader.await()
+  return ctx
+}
+
+async function recall(ctx: Context, owner: Agent, arguments_: Record<string, unknown>) {
+  return ctx.tools.execute({
+    signal: new AbortController().signal,
+    callId: CallId('recall-test'),
+    name: 'recall',
+    arguments: arguments_,
+    agent: owner,
+  })
+}
+
+describe('tool-recall real Loader composition through cordis.yml', () => {
+  it('registers the recall schema with the compaction-recall surface filter', async () => {
+    const ctx = await boot()
+    const schema = ctx.tools.schemas().find(s => s.name === 'recall')
+    expect(schema).toBeDefined()
+    expect(schema?.description).toContain('shadowed')
+    // ToolSchema.parameters is a loose JSON-schema record; narrow only the
+    // surfaces entry the test asserts.
+    const properties = schema?.parameters['properties'] as { surfaces?: { items?: { enum?: string[] } } } | undefined
+    expect(properties?.surfaces?.items?.enum).toEqual(['current', 'shadowed', 'log-only'])
+  }, 30_000)
+
+  it('fails loading when a required config bound is missing', async () => {
+    await expect(bootWithoutConfig()).rejects.toThrow('missing required value')
+  }, 30_000)
+
+  it('recalls compaction-shadowed pre-compaction content by keyword', async () => {
+    const ctx = await boot()
+    const owner = agent(ctx, seededSession())
+    const result = await recall(ctx, owner, { query: 'pre-compaction', surfaces: ['shadowed'] })
+    expect(result.isError).toBe(false)
+    const text = resultText(result)
+    expect(text).toContain('Recalled 2 matching event(s)')
+    expect(text).toContain('#0 user/message [shadowed]')
+    expect(text).toContain('#1 assistant/message [shadowed]')
+    expect(text).toContain('pre-compaction user question about recall')
+    expect(text).toContain('pre-compaction answer')
+    expect(text).not.toContain('checkpoint summary text')
+  }, 30_000)
+
+  it('reads one exact event by seq with its surface classification', async () => {
+    const ctx = await boot()
+    const owner = agent(ctx, seededSession())
+    const result = await recall(ctx, owner, { seq: 3, window: 1 })
+    expect(result.isError).toBe(false)
+    const text = resultText(result)
+    expect(text).toContain('Recalled 3 matching event(s)')
+    expect(text).toContain('#3 compaction/summary [log-only]')
+  }, 30_000)
+
+  it('excludes events of the current step from recall', async () => {
+    const ctx = await boot()
+    const owner = agent(ctx, seededSession())
+    const result = await recall(ctx, owner, { query: 'in-flight' })
+    expect(result.isError).toBe(false)
+    expect(resultText(result)).toContain('Recalled 0 matching event(s)')
+  }, 30_000)
+
+  it('rejects mutually exclusive seq and query, and window without seq', async () => {
+    const ctx = await boot()
+    const owner = agent(ctx, seededSession())
+    const xor = await recall(ctx, owner, { seq: 1, query: 'x' })
+    expect(xor.isError).toBe(true)
+    expect(resultText(xor)).toContain('mutually exclusive')
+    const window = await recall(ctx, owner, { window: 1 })
+    expect(window.isError).toBe(true)
+    expect(resultText(window)).toContain('requires `seq`')
+  }, 30_000)
+})
+
+/** Boot without the config block to prove the bounds are required. */
+async function bootWithoutConfig(): Promise<Context> {
+  root = await mkdtemp(join(tmpdir(), 'dsh-recall-loader-'))
+  const configPath = join(root, 'cordis.yml')
+  await writeFile(configPath, [
+    "- name: '@deepseek-ai/dsh-agent'",
+    "- name: '@deepseek-ai/dsh-system-prompt'",
+    "- name: '@deepseek-ai/dsh-tools'",
+    "- name: 'dsh-recall'",
+    '',
+  ].join('\n'))
+
+  const ctx = new Context()
+  context = ctx
+  ctx.baseUrl = pathToFileURL(root).href + '/'
+  await ctx.plugin(Loader)
+  ctx.loader.builtins.include = Include
+  const modules = new Map<string, unknown>([
+    ['@deepseek-ai/dsh-agent', AgentRegistry],
+    ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
+    ['@deepseek-ai/dsh-tools', ToolRuntime],
+    ['dsh-recall', ToolRecall],
+  ])
+  ctx.loader.internal = {
+    version: 'v2',
+    async import(specifier: string) {
+      if (!modules.has(specifier)) throw new Error(`unexpected Loader import: ${specifier}`)
+      return modules.get(specifier)
+    },
+  } as unknown as NonNullable<typeof ctx.loader.internal>
+  await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
+  await ctx.loader.await()
+  return ctx
+}
