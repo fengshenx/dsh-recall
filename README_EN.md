@@ -45,7 +45,7 @@ Arguments:
 | `max_results` | optional: max matching events (hits) to return (1-10, default 10, internal cap 10) |
 | `surfaces` | optional: only events of these surface classifications (`current` / `shadowed` / `log-only`); all surfaces when omitted |
 
-Hits are listed in relevance order, one per line: `#seq type [surface] (time): text`. There are no extra context events between rows — long event texts are covered by the match window below.
+Hits are listed in relevance order: the first line identifies each hit (`#seq type [surface]`), then each hit's text flows after a blank line — text is not line-restricted (it may span lines), bounded only by the per-event character cap; long texts are covered by the match window below.
 
 - **Relevance ranking**: rare (long) terms and higher density rank first, newest wins ties; CJK terms get 2-4 char n-gram fallback matching, so rewritten long Chinese phrases still recall
 - **Long-event truncation**: only the content around the first match is kept (centered on the match), with omitted-character markers
