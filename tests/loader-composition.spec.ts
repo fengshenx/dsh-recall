@@ -119,7 +119,7 @@ function seededSession(): Session {
   return Session.create(SessionId('recall-loader-agent'), seed)
 }
 
-async function boot(): Promise<Context> {
+async function boot(overrides: { maxCharsPerEvent?: number } = {}): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-recall-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
@@ -129,7 +129,7 @@ async function boot(): Promise<Context> {
     "- name: 'dsh-recall'",
     '  config:',
     '    maxResults: 10',
-    '    maxCharsPerEvent: 200',
+    `    maxCharsPerEvent: ${overrides.maxCharsPerEvent ?? 200}`,
     '',
   ].join('\n'))
 
@@ -290,6 +290,21 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     const text = resultText(result)
     expect(text).toContain('KEYWORD in the middle')
     expect(text).toContain('省略')
+  }, 30_000)
+
+  it('windows long texts below the per-event cap (compact 2400-char budget)', async () => {
+    const ctx = await boot({ maxCharsPerEvent: 5000 })
+    const long = 'a'.repeat(1500) + 'KEYWORD in the middle' + 'b'.repeat(1500)
+    const session = Session.create(SessionId('recall-window'), [
+      { type: 'user/message', seq: 0, time: 1, data: { role: 'user', id: MessageId('w-0'), source: { kind: 'user' }, content: [{ type: 'text', text: long }] }, surfaceOp: 'append' },
+    ])
+    const owner = agent(ctx, session)
+    const result = await recall(ctx, owner, { query: 'keyword' })
+    expect(result.isError).toBe(false)
+    const text = resultText(result)
+    expect(text).toContain('KEYWORD in the middle')
+    expect(text).toContain('省略')
+    expect(text.length).toBeLessThan(2600)
   }, 30_000)
 
   it('tells the agent when the session never compacted', async () => {
