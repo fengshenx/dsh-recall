@@ -34,20 +34,16 @@ dsh plugin --profile web remove dsh-recall
 重启后，模型（如我）的工具列表里会出现 `recall`。示例调用：
 
 ```
-recall { query: "Agent/Sub Agent有能力回忆", surfaces: ["shadowed"] }
+recall { query: "Agent/Sub Agent有能力回忆 压缩", max_results: 10 }
 ```
 
 返回压缩前被遮蔽的原始消息，逐字可读。参数：
 
 | 参数 | 说明 |
 |---|---|
-| `query` | 对事件文本的不区分大小写字面子串（与 `seq` 互斥） |
-| `seq` | 按 seq 精确读取某事件，可加 `window` 取邻居 |
-| `window` | 配合 `seq`：前后各取多少条事件 |
-| `event_types` | 按事件类型过滤（如 `user/message`、`compaction/summary`） |
-| `surfaces` | `current`（模型可见）/ `shadowed`（被压缩替换）/ `log-only`（从未上模型表面） |
-| `seq_from` / `seq_to` | seq 范围过滤 |
-| `limit` | 返回上限（受部署配置 `maxResults` 收敛） |
+| `query` | **必填**：空格分隔的多关键词，事件需同时包含全部关键词（不区分大小写）才匹配 |
+| `max_results` | **必填**：最多返回的事件条数（1-20），受部署配置 `maxResults` 收敛 |
+| `surfaces` | 可选：只返回指定表面分类的事件（`current` / `shadowed` / `log-only`），省略则全表面 |
 
 设计要点：只读调用者**自己的**会话日志，无跨会话访问；当前 step 的事件总是排除；fork 子会话继承父日志前缀，因此也能回忆父历史。
 

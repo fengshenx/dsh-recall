@@ -34,20 +34,16 @@ dsh plugin --profile web remove dsh-recall
 After the restart the model's tool list includes `recall`. Example:
 
 ```
-recall { query: "Agent/Sub Agent有能力回忆", surfaces: ["shadowed"] }
+recall { query: "Agent/Sub Agent有能力回忆 压缩", max_results: 10 }
 ```
 
 Arguments:
 
 | arg | meaning |
 |---|---|
-| `query` | case-insensitive literal substring over event text (mutually exclusive with `seq`) |
-| `seq` | read one exact event by seq; add `window` for neighbors |
-| `window` | with `seq`: how many preceding/following events to include |
-| `event_types` | filter by event type (e.g. `user/message`, `compaction/summary`) |
-| `surfaces` | `current` (model-visible) / `shadowed` (replaced by compaction) / `log-only` (never on the surface) |
-| `seq_from` / `seq_to` | seq range filter |
-| `limit` | result cap (clamped to the deployment `maxResults`) |
+| `query` | **required**: space-separated keywords; an event must contain every keyword (case-insensitive) |
+| `max_results` | **required**: max events to return (1-20), clamped to the deployment `maxResults` |
+| `surfaces` | optional: only events of these surface classifications (`current` / `shadowed` / `log-only`); all surfaces when omitted |
 
 Design: read-only access to the CALLING agent's OWN session log (no cross-session access); events of the current step are always excluded; a fork inherits its parent's completed-turn log prefix, so it recalls parent history too.
 

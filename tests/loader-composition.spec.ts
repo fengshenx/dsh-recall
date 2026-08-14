@@ -1,7 +1,8 @@
 // Real Loader composition through cordis.yml: the recall tool must boot through
 // the same loader path a deployment uses, and its model-facing schema plus the
-// executed behavior — keyword search, exact seq reads, compaction-shadowed
-// surface filtering, and the current-step cap — must hold end to end.
+// executed behavior — multi-keyword search, compaction-shadowed surface
+// filtering, the mandatory result cap, and the current-step cap — must hold
+// end to end.
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -175,6 +176,8 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     // surfaces entry the test asserts.
     const properties = schema?.parameters['properties'] as { surfaces?: { items?: { enum?: string[] } } } | undefined
     expect(properties?.surfaces?.items?.enum).toEqual(['current', 'shadowed', 'log-only'])
+    const required = schema?.parameters['required'] as string[] | undefined
+    expect(required).toEqual(['query', 'max_results'])
   }, 30_000)
 
   it('fails loading when a required config bound is missing', async () => {
@@ -184,7 +187,7 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
   it('recalls compaction-shadowed pre-compaction content by keyword', async () => {
     const ctx = await boot()
     const owner = agent(ctx, seededSession())
-    const result = await recall(ctx, owner, { query: 'pre-compaction', surfaces: ['shadowed'] })
+    const result = await recall(ctx, owner, { query: 'pre-compaction', max_results: 10 })
     expect(result.isError).toBe(false)
     const text = resultText(result)
     expect(text).toContain('Recalled 2 matching event(s)')
@@ -195,33 +198,45 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     expect(text).not.toContain('checkpoint summary text')
   }, 30_000)
 
-  it('reads one exact event by seq with its surface classification', async () => {
+  it('matches only events containing every space-separated keyword', async () => {
     const ctx = await boot()
     const owner = agent(ctx, seededSession())
-    const result = await recall(ctx, owner, { seq: 3, window: 1 })
-    expect(result.isError).toBe(false)
-    const text = resultText(result)
-    expect(text).toContain('Recalled 3 matching event(s)')
-    expect(text).toContain('#3 compaction/summary [log-only]')
+    const both = await recall(ctx, owner, { query: 'pre-compaction question', max_results: 10 })
+    expect(both.isError).toBe(false)
+    const bothText = resultText(both)
+    expect(bothText).toContain('Recalled 1 matching event(s)')
+    expect(bothText).toContain('#0 user/message [shadowed]')
+    expect(bothText).not.toContain('#1 assistant/message')
+    const none = await recall(ctx, owner, { query: 'pre-compaction summary', max_results: 10 })
+    expect(none.isError).toBe(false)
+    expect(resultText(none)).toContain('Recalled 0 matching event(s)')
   }, 30_000)
 
   it('excludes events of the current step from recall', async () => {
     const ctx = await boot()
     const owner = agent(ctx, seededSession())
-    const result = await recall(ctx, owner, { query: 'in-flight' })
+    const result = await recall(ctx, owner, { query: 'in-flight', max_results: 10 })
     expect(result.isError).toBe(false)
     expect(resultText(result)).toContain('Recalled 0 matching event(s)')
   }, 30_000)
 
-  it('rejects mutually exclusive seq and query, and window without seq', async () => {
+  it('filters by the optional surfaces argument', async () => {
     const ctx = await boot()
     const owner = agent(ctx, seededSession())
-    const xor = await recall(ctx, owner, { seq: 1, query: 'x' })
-    expect(xor.isError).toBe(true)
-    expect(resultText(xor)).toContain('mutually exclusive')
-    const window = await recall(ctx, owner, { window: 1 })
-    expect(window.isError).toBe(true)
-    expect(resultText(window)).toContain('requires `seq`')
+    const result = await recall(ctx, owner, { query: 'pre-compaction', surfaces: ['current'], max_results: 10 })
+    expect(result.isError).toBe(false)
+    expect(resultText(result)).toContain('Recalled 0 matching event(s)')
+  }, 30_000)
+
+  it('caps returned events at the mandatory max_results', async () => {
+    const ctx = await boot()
+    const owner = agent(ctx, seededSession())
+    const result = await recall(ctx, owner, { query: 'pre-compaction', max_results: 1 })
+    expect(result.isError).toBe(false)
+    const text = resultText(result)
+    expect(text).toContain('Recalled 2 matching event(s)')
+    expect(text).toContain('returned 1')
+    expect(text).not.toContain('#1 assistant/message')
   }, 30_000)
 })
 
