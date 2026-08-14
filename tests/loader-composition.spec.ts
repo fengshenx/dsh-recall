@@ -177,7 +177,7 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     const properties = schema?.parameters['properties'] as { surfaces?: { items?: { enum?: string[] } } } | undefined
     expect(properties?.surfaces?.items?.enum).toEqual(['current', 'shadowed', 'log-only'])
     const required = schema?.parameters['required'] as string[] | undefined
-    expect(required).toEqual(['query', 'max_results'])
+    expect(required).toEqual(['query'])
   }, 30_000)
 
   it('fails loading when a required config bound is missing', async () => {
@@ -187,7 +187,7 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
   it('recalls compaction-shadowed pre-compaction content by keyword', async () => {
     const ctx = await boot()
     const owner = agent(ctx, seededSession())
-    const result = await recall(ctx, owner, { query: 'pre-compaction', max_results: 10 })
+    const result = await recall(ctx, owner, { query: 'pre-compaction' })
     expect(result.isError).toBe(false)
     const text = resultText(result)
     expect(text).toContain('Recalled 2 matching event(s)')
@@ -215,7 +215,7 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
   it('excludes events of the current step from recall', async () => {
     const ctx = await boot()
     const owner = agent(ctx, seededSession())
-    const result = await recall(ctx, owner, { query: 'in-flight', max_results: 10 })
+    const result = await recall(ctx, owner, { query: 'in-flight' })
     expect(result.isError).toBe(false)
     expect(resultText(result)).toContain('Recalled 0 matching event(s)')
   }, 30_000)
@@ -228,15 +228,18 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     expect(resultText(result)).toContain('Recalled 0 matching event(s)')
   }, 30_000)
 
-  it('caps returned events at the mandatory max_results', async () => {
+  it('caps returned events at max_results and clamps oversized requests', async () => {
     const ctx = await boot()
     const owner = agent(ctx, seededSession())
-    const result = await recall(ctx, owner, { query: 'pre-compaction', max_results: 1 })
-    expect(result.isError).toBe(false)
-    const text = resultText(result)
+    const capped = await recall(ctx, owner, { query: 'pre-compaction', max_results: 1 })
+    expect(capped.isError).toBe(false)
+    const text = resultText(capped)
     expect(text).toContain('Recalled 2 matching event(s)')
     expect(text).toContain('returned 1')
     expect(text).not.toContain('#1 assistant/message')
+    const oversized = await recall(ctx, owner, { query: 'pre-compaction', max_results: 99 })
+    expect(oversized.isError).toBe(false)
+    expect(resultText(oversized)).toContain('returned 2')
   }, 30_000)
 })
 

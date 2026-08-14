@@ -42,7 +42,7 @@ Arguments:
 | arg | meaning |
 |---|---|
 | `query` | **required**: space-separated keywords; an event must contain every keyword (case-insensitive) |
-| `max_results` | **required**: max events to return (1-20), clamped to the deployment `maxResults` |
+| `max_results` | optional: max events to return (1-10, default 10, internal cap 10) |
 | `surfaces` | optional: only events of these surface classifications (`current` / `shadowed` / `log-only`); all surfaces when omitted |
 
 Design: read-only access to the CALLING agent's OWN session log (no cross-session access); events of the current step are always excluded; a fork inherits its parent's completed-turn log prefix, so it recalls parent history too.
