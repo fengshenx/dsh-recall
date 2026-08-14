@@ -47,6 +47,11 @@ Arguments:
 
 Each hit carries up to `contextEvents` neighbors on both sides: hit lines are prefixed `>>`, context lines are indented (deduplicated, ordered by seq).
 
+- **Relevance ranking**: rare (long) terms and higher density rank first, newest wins ties; CJK terms get 2-4 char n-gram fallback matching, so rewritten long Chinese phrases still recall
+- **Long-event truncation**: only the content around the first match is kept (centered on the match), with omitted-character markers
+- `query` is limited to 200 characters; longer queries error
+- A session that never compacted returns guidance instead of an empty result list (the early content is in the current context)
+
 Design: read-only access to the CALLING agent's OWN session log (no cross-session access); events of the current step are always excluded; a fork inherits its parent's completed-turn log prefix, so it recalls parent history too.
 
 ## Configuration

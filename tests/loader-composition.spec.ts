@@ -237,17 +237,83 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
   it('caps hits at max_results, clamps oversized requests, and keeps context', async () => {
     const ctx = await boot()
     const owner = agent(ctx, seededSession())
+    // Both hits score equally ('pre-compaction' once each); the newest wins,
+    // so the single slot goes to seq 1 and seq 0 arrives as its context.
     const capped = await recall(ctx, owner, { query: 'pre-compaction', max_results: 1 })
     expect(capped.isError).toBe(false)
     const text = resultText(capped)
-    expect(text).toContain('Recalled 1 matching event(s), returned 3')
-    expect(text).toContain('>> #0 user/message [shadowed]')
-    expect(text).not.toContain('>> #1 assistant/message')
-    // The second match still arrives as context of the first hit.
-    expect(text).toContain('  #1 assistant/message [shadowed]')
+    expect(text).toContain('Recalled 1 matching event(s), returned 4')
+    expect(text).toContain('>> #1 assistant/message [shadowed]')
+    expect(text).toContain('  #0 user/message [shadowed]')
+    expect(text).not.toContain('>> #0 user/message')
     const oversized = await recall(ctx, owner, { query: 'pre-compaction', max_results: 99 })
     expect(oversized.isError).toBe(false)
     expect(resultText(oversized)).toContain('returned 4')
+  }, 30_000)
+
+  it('ranks hits by term density, newest first on ties', async () => {
+    const ctx = await boot()
+    const session = Session.create(SessionId('recall-rank'), [
+      { type: 'user/message', seq: 0, time: 1, data: { role: 'user', id: MessageId('r-0'), source: { kind: 'user' }, content: [{ type: 'text', text: 'beta beta gamma' }] }, surfaceOp: 'append' },
+      { type: 'user/message', seq: 1, time: 2, data: { role: 'user', id: MessageId('r-1'), source: { kind: 'user' }, content: [{ type: 'text', text: 'beta' }] }, surfaceOp: 'append' },
+    ])
+    const owner = agent(ctx, session)
+    const result = await recall(ctx, owner, { query: 'beta', max_results: 1 })
+    expect(result.isError).toBe(false)
+    const text = resultText(result)
+    // Denser hit (two occurrences) wins the single slot.
+    expect(text).toContain('>> #0 user/message [current]')
+    expect(text).toContain('  #1 user/message [current]')
+    expect(text).not.toContain('>> #1 user/message')
+  }, 30_000)
+
+  it('recruits CJK partial matches via n-grams', async () => {
+    const ctx = await boot()
+    const session = Session.create(SessionId('recall-gram'), [
+      { type: 'user/message', seq: 0, time: 1, data: { role: 'user', id: MessageId('g-0'), source: { kind: 'user' }, content: [{ type: 'text', text: '有一段历史记录在这里' }] }, surfaceOp: 'append' },
+      { type: 'user/message', seq: 1, time: 2, data: { role: 'user', id: MessageId('g-1'), source: { kind: 'user' }, content: [{ type: 'text', text: '压缩历史内容 完整命中' }] }, surfaceOp: 'append' },
+    ])
+    const owner = agent(ctx, session)
+    const result = await recall(ctx, owner, { query: '压缩历史内容' })
+    expect(result.isError).toBe(false)
+    const text = resultText(result)
+    // seq 0 lacks the full term but contains the '历史' gram — recruited as a hit.
+    expect(text).toContain('Recalled 2 matching event(s)')
+    expect(text).toContain('>> #0 user/message [current]')
+    expect(text).toContain('>> #1 user/message [current]')
+  }, 30_000)
+
+  it('truncates long event texts around the first match', async () => {
+    const ctx = await boot()
+    const long = 'a'.repeat(100) + 'KEYWORD in the middle' + 'b'.repeat(100)
+    const session = Session.create(SessionId('recall-truncate'), [
+      { type: 'user/message', seq: 0, time: 1, data: { role: 'user', id: MessageId('t-0'), source: { kind: 'user' }, content: [{ type: 'text', text: long }] }, surfaceOp: 'append' },
+    ])
+    const owner = agent(ctx, session)
+    const result = await recall(ctx, owner, { query: 'keyword' })
+    expect(result.isError).toBe(false)
+    const text = resultText(result)
+    expect(text).toContain('KEYWORD in the middle')
+    expect(text).toContain('省略')
+  }, 30_000)
+
+  it('tells the agent when the session never compacted', async () => {
+    const ctx = await boot()
+    const session = Session.create(SessionId('recall-fresh'), [
+      { type: 'user/message', seq: 0, time: 1, data: { role: 'user', id: MessageId('f-0'), source: { kind: 'user' }, content: [{ type: 'text', text: 'just a short conversation' }] }, surfaceOp: 'append' },
+    ])
+    const owner = agent(ctx, session)
+    const result = await recall(ctx, owner, { query: 'nonexistent-thing' })
+    expect(result.isError).toBe(false)
+    expect(resultText(result)).toContain('还没有发生过压缩')
+  }, 30_000)
+
+  it('rejects queries longer than 200 characters', async () => {
+    const ctx = await boot()
+    const owner = agent(ctx, seededSession())
+    const result = await recall(ctx, owner, { query: 'x'.repeat(201) })
+    expect(result.isError).toBe(true)
+    expect(resultText(result)).toContain('at most 200')
   }, 30_000)
 })
 
