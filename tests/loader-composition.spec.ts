@@ -310,6 +310,32 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     expect(result.isError).toBe(true)
     expect(resultText(result)).toContain('at most 200')
   }, 30_000)
+
+  it('folds full-width query characters onto ASCII text via NFKC', async () => {
+    const ctx = await boot()
+    const session = Session.create(SessionId('recall-nfkc'), [
+      { type: 'user/message', seq: 0, time: 1, data: { role: 'user', id: MessageId('n-0'), source: { kind: 'user' }, content: [{ type: 'text', text: 'abc plain' }] }, surfaceOp: 'append' },
+    ])
+    const owner = agent(ctx, session)
+    // 'ａｂｃ' is full-width: not NFKC-stable, so the full NFKC path runs.
+    const result = await recall(ctx, owner, { query: 'ａｂｃ' })
+    expect(result.isError).toBe(false)
+    expect(resultText(result)).toContain('#0 user/message [current]')
+  }, 30_000)
+
+  it('fast path: an NFKC-stable query misses full-width variants in event text', async () => {
+    const ctx = await boot()
+    const session = Session.create(SessionId('recall-fastpath'), [
+      { type: 'user/message', seq: 0, time: 1, data: { role: 'user', id: MessageId('f-0'), source: { kind: 'user' }, content: [{ type: 'text', text: 'ＡＢＣ full-width' }] }, surfaceOp: 'append' },
+      { type: 'compaction/start', seq: 1, time: 2, data: { compactionId: CompactionId('recall-fastpath'), turn: null } },
+    ])
+    const owner = agent(ctx, session)
+    const result = await recall(ctx, owner, { query: 'abc' })
+    expect(result.isError).toBe(false)
+    const text = resultText(result)
+    expect(text).toContain('Recalled 0 matching event(s)')
+    expect(text).not.toContain('#0 user/message')
+  }, 30_000)
 })
 
 /** Boot without the config block to prove the bounds are required. */

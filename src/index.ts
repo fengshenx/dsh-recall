@@ -67,12 +67,20 @@ interface ParsedQuery {
   terms: string[]
   /** CJK 2-4 char sliding windows of terms longer than 4 chars; scoring only. */
   ngrams: string[]
+  /**
+   * True when NFKC cannot change the query (no full-width or combining
+   * forms). Event text can then be matched with a cheap plain-lowercase
+   * scan; the documented corner: full-width variants in event text (e.g.
+   * `ＡＢＣ` for a query of `abc`) no longer match.
+   */
+  nfkcStable: boolean
 }
 
 /** Split a raw query into terms and CJK n-grams. */
 function parseQuery(query: string): ParsedQuery {
+  const nfkcStable = query.normalize('NFKC') === query
   const normalized = normalize(query).replace(/\s+/g, ' ').trim()
-  if (normalized.length === 0) return { terms: [], ngrams: [] }
+  if (normalized.length === 0) return { terms: [], ngrams: [], nfkcStable }
   const terms = normalized.split(' ').filter(term => term.length > 0)
   const ngrams = new Set<string>()
   for (const term of terms) {
@@ -82,7 +90,7 @@ function parseQuery(query: string): ParsedQuery {
       for (let i = 0; i + win <= term.length; i += 1) ngrams.add(term.slice(i, i + win))
     }
   }
-  return { terms, ngrams: [...ngrams] }
+  return { terms, ngrams: [...ngrams], nfkcStable }
 }
 
 /**
@@ -145,9 +153,9 @@ function findMatchSpan(haystack: string, query: ParsedQuery): { start: number; e
  * characters centered on the match span, with omitted-character markers.
  * Without a match position (no keyword in the text), cut the head.
  */
-function truncateAroundMatch(text: string, query: ParsedQuery, maxChars: number): string {
+function truncateAroundMatch(text: string, query: ParsedQuery, maxChars: number, fold: (text: string) => string): string {
   if (text.length <= maxChars) return text
-  const span = findMatchSpan(normalize(text), query)
+  const span = findMatchSpan(fold(text), query)
   if (span === null) {
     return `${text.slice(0, maxChars)}…(省略${text.length - maxChars}字符)…`
   }
@@ -329,10 +337,13 @@ function runRecall(
   const hasCompaction = events.some(event => event.type.startsWith('compaction/'))
 
   const surfaceFilter = args.surfaces
+  // NFKC is the expensive part of a full scan; plain lowercase is enough
+  // when the query itself is NFKC-stable (the common ASCII/CJK case).
+  const fold: (text: string) => string = query.nfkcStable ? text => text.toLowerCase() : normalize
   const scored: { event: SessionEvent; score: number }[] = []
   for (const event of eligible) {
     if (surfaceFilter !== undefined && !surfaceFilter.includes(surfaceOf(event))) continue
-    const score = scoreEvent(normalize(extractSessionEventText(event)), query)
+    const score = scoreEvent(fold(extractSessionEventText(event)), query)
     if (score <= 0) continue
     scored.push({ event, score })
   }
@@ -356,7 +367,7 @@ function runRecall(
       type: event.type,
       surface: surfaceOf(event),
       time: event.time,
-      text: truncateAroundMatch(text, query, config.maxCharsPerEvent),
+      text: truncateAroundMatch(text, query, config.maxCharsPerEvent, fold),
     }
   })
   return { count: hits.length, events: recalled }
