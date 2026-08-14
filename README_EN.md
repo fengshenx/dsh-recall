@@ -67,6 +67,20 @@ pnpm test         # vitest, incl. a real Loader composition test
 npm pack --dry-run
 ```
 
+## Local testing (before publishing to npm)
+
+`dsh plugin` accepts local paths and installs them as `link:` symlinks (source stays live):
+
+```sh
+dsh plugin --profile web add /Users/<you>/<path>/dsh-recall
+```
+
+It does both steps automatically: appends the package to the profile's `dsh.profile.bundles` and applies the package's own `cordis.patch.yml` at boot. Afterwards:
+
+1. Remove any old manual mount row for the same `tool-recall` id from the profile's `cordis.patch.yml` to avoid a duplicate insert;
+2. Restart the web server; `dsh --profile web --dump-config` should show a `# == dsh-recall` section;
+3. After each `src/` change, run `pnpm build` and restart the web server (no need to re-run `plugin add`).
+
 ## How it works
 
 - The plugin is a plain npm package declaring `dsh.bundle.patch` (`cordis.patch.yml`) plus a standard plugin row.
