@@ -8,9 +8,7 @@ DSH 插件：为模型提供 **`recall` 工具**——搜索并读取**调用代
 
 ## 安装
 
-前置：DSH（`dsh web` 可正常运行）、Node.js ≥ 20、pnpm ≥ 10（`dsh plugin` 命令需要）。
-
-### 方式一（推荐）：官方 CLI 一条命令
+前置：DSH（`dsh web` 可正常运行）、Node.js ≥ 20、pnpm ≥ 10（`dsh plugin` 命令需要）。插件发布在 npm，一条命令安装并自动挂载：
 
 ```sh
 dsh plugin --profile web add dsh-recall
@@ -24,36 +22,6 @@ dsh plugin --profile web add dsh-recall
 # 重启 dsh web（视你的启动方式而定）
 # 例如：pm2 restart dsh-web，或 Ctrl+C 后重新 dsh web
 ```
-
-### 方式二：手动 npm 安装 + 挂载行
-
-```sh
-cd ~/.dsh/profiles/web
-npm i dsh-recall
-```
-
-然后在 `~/.dsh/profiles/web/cordis.patch.yml` 加入：
-
-```yaml
-- insert:
-    - id: tool-recall
-      name: 'dsh-recall'
-      config:
-        maxResults: 25
-        maxCharsPerEvent: 3000
-```
-
-重启 `dsh web`。注意：方式一和方式二**二选一**，同时使用会双挂载。
-
-### 从 GitHub 安装（不发布到 npm）
-
-```sh
-dsh plugin --profile web add github:fengshenx/dsh-recall
-# 或
-cd ~/.dsh/profiles/web && npm i github:fengshenx/dsh-recall
-```
-
-包内 `prepare` 脚本会在安装时自动构建（需要 Node 环境）。
 
 ### 卸载
 
@@ -98,12 +66,11 @@ npm pack --dry-run  # 检查发布内容
 
 ## 发布
 
+安装走 npm 源，发布是用户可安装的前提：
+
 ```sh
-# 发布到 npm（名字 dsh-recall 当前可用）
 npm publish
 ```
-
-或仅推 GitHub：推送后用户按上面"从 GitHub 安装"即可。
 
 ## 工作原理简述
 

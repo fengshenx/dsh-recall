@@ -8,9 +8,7 @@ Compaction never deletes events: it replaces a visible history range with a summ
 
 ## Install
 
-Prerequisites: DSH (`dsh web` works), Node.js ≥ 20, pnpm ≥ 10 (needed by the `dsh plugin` command).
-
-### Option 1 (recommended): one official CLI command
+Prerequisites: DSH (`dsh web` works), Node.js ≥ 20, pnpm ≥ 10 (needed by the `dsh plugin` command). The plugin is published on npm — one command installs and mounts it:
 
 ```sh
 dsh plugin --profile web add dsh-recall
@@ -24,36 +22,6 @@ dsh plugin --profile web add dsh-recall
 # restart dsh web (depends on how you run it)
 # e.g. pm2 restart dsh-web, or Ctrl+C then dsh web again
 ```
-
-### Option 2: manual npm install + mount row
-
-```sh
-cd ~/.dsh/profiles/web
-npm i dsh-recall
-```
-
-Then append to `~/.dsh/profiles/web/cordis.patch.yml`:
-
-```yaml
-- insert:
-    - id: tool-recall
-      name: 'dsh-recall'
-      config:
-        maxResults: 25
-        maxCharsPerEvent: 3000
-```
-
-Restart `dsh web`. Use exactly ONE of the two options — both together double-mount.
-
-### From GitHub (without publishing to npm)
-
-```sh
-dsh plugin --profile web add github:fengshenx/dsh-recall
-# or
-cd ~/.dsh/profiles/web && npm i github:fengshenx/dsh-recall
-```
-
-The package `prepare` script builds automatically on install.
 
 ### Uninstall
 
@@ -98,11 +66,11 @@ npm pack --dry-run
 
 ## Publishing
 
-```sh
-npm publish       # the name dsh-recall is currently available
-```
+The one-command install pulls from npm, so publishing is a prerequisite for users:
 
-Or just push to GitHub — users install per "From GitHub" above.
+```sh
+npm publish
+```
 
 ## How it works
 
