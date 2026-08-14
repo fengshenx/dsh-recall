@@ -45,7 +45,7 @@ Arguments:
 | `max_results` | optional: max matching events (hits) to return (1-10, default 10, internal cap 10) |
 | `surfaces` | optional: only events of these surface classifications (`current` / `shadowed` / `log-only`); all surfaces when omitted |
 
-Each hit carries up to `contextEvents` neighbors on both sides: hit lines are prefixed `>>`, context lines are indented (deduplicated, ordered by seq).
+Hits are listed in relevance order, one per line: `#seq type [surface] (time): text`. There are no extra context events between rows — long event texts are covered by the match window below.
 
 - **Relevance ranking**: rare (long) terms and higher density rank first, newest wins ties; CJK terms get 2-4 char n-gram fallback matching, so rewritten long Chinese phrases still recall
 - **Long-event truncation**: only the content around the first match is kept (centered on the match), with omitted-character markers
@@ -56,7 +56,7 @@ Design: read-only access to the CALLING agent's OWN session log (no cross-sessio
 
 ## Configuration
 
-`maxResults` (hit cap per call), `maxCharsPerEvent` (per-event text cap, default 20000) and `contextEvents` (how many neighbors each hit carries on each side, default 2) are required deployment config, adjustable in the mount row's `config`.
+`maxResults` (hit cap per call) and `maxCharsPerEvent` (per-event text cap, default 20000) are required deployment config, adjustable in the mount row's `config`.
 
 ## Development
 

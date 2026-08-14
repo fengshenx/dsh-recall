@@ -15,5 +15,4 @@
       name: 'dsh-recall'
       config:
         maxResults: 25
-        contextEvents: 2
         maxCharsPerEvent: 20000

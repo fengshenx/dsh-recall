@@ -129,7 +129,6 @@ async function boot(): Promise<Context> {
     "- name: 'dsh-recall'",
     '  config:',
     '    maxResults: 10',
-    '    contextEvents: 2',
     '    maxCharsPerEvent: 200',
     '',
   ].join('\n'))
@@ -191,14 +190,13 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     const result = await recall(ctx, owner, { query: 'pre-compaction' })
     expect(result.isError).toBe(false)
     const text = resultText(result)
-    expect(text).toContain('Recalled 2 matching event(s), returned 4')
-    expect(text).toContain('>> #0 user/message [shadowed]')
-    expect(text).toContain('>> #1 assistant/message [shadowed]')
+    expect(text).toContain('Recalled 2 matching event(s)')
+    expect(text).toContain('#0 user/message [shadowed]')
+    expect(text).toContain('#1 assistant/message [shadowed]')
     expect(text).toContain('pre-compaction user question about recall')
     expect(text).toContain('pre-compaction answer')
-    // Neighborhood context from both hits, merged and seq-ordered.
-    expect(text).toContain('  #2 compaction/start [log-only]')
-    expect(text).toContain('  #3 compaction/summary [log-only]')
+    // No context rows without contextEvents: structural events are not hits.
+    expect(text).not.toContain('#2 compaction/start')
     expect(text).not.toContain('checkpoint summary text')
   }, 30_000)
 
@@ -208,14 +206,13 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     const both = await recall(ctx, owner, { query: 'pre-compaction question', max_results: 10 })
     expect(both.isError).toBe(false)
     const bothText = resultText(both)
-    expect(bothText).toContain('Recalled 1 matching event(s), returned 3')
-    expect(bothText).toContain('>> #0 user/message [shadowed]')
-    // The other match is now context, not a hit.
-    expect(bothText).toContain('  #1 assistant/message [shadowed]')
-    expect(bothText).not.toContain('>> #1 assistant/message')
+    expect(bothText).toContain('Recalled 1 matching event(s)')
+    expect(bothText).toContain('#0 user/message [shadowed]')
+    // The other event lacks 'question' — no hit, no context row.
+    expect(bothText).not.toContain('#1 assistant/message')
     const none = await recall(ctx, owner, { query: 'pre-compaction summary', max_results: 10 })
     expect(none.isError).toBe(false)
-    expect(resultText(none)).toContain('Recalled 0 matching event(s), returned 0')
+    expect(resultText(none)).toContain('Recalled 0 matching event(s)')
   }, 30_000)
 
   it('excludes events of the current step from recall', async () => {
@@ -231,24 +228,23 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     const owner = agent(ctx, seededSession())
     const result = await recall(ctx, owner, { query: 'pre-compaction', surfaces: ['current'], max_results: 10 })
     expect(result.isError).toBe(false)
-    expect(resultText(result)).toContain('Recalled 0 matching event(s), returned 0')
+    expect(resultText(result)).toContain('Recalled 0 matching event(s)')
   }, 30_000)
 
-  it('caps hits at max_results, clamps oversized requests, and keeps context', async () => {
+  it('caps hits at max_results and clamps oversized requests', async () => {
     const ctx = await boot()
     const owner = agent(ctx, seededSession())
-    // Both hits score equally ('pre-compaction' once each); the newest wins,
-    // so the single slot goes to seq 1 and seq 0 arrives as its context.
+    // Both hits score equally ('pre-compaction' once each); the newest wins
+    // the single slot.
     const capped = await recall(ctx, owner, { query: 'pre-compaction', max_results: 1 })
     expect(capped.isError).toBe(false)
     const text = resultText(capped)
-    expect(text).toContain('Recalled 1 matching event(s), returned 4')
-    expect(text).toContain('>> #1 assistant/message [shadowed]')
-    expect(text).toContain('  #0 user/message [shadowed]')
-    expect(text).not.toContain('>> #0 user/message')
+    expect(text).toContain('Recalled 1 matching event(s)')
+    expect(text).toContain('#1 assistant/message [shadowed]')
+    expect(text).not.toContain('#0 user/message')
     const oversized = await recall(ctx, owner, { query: 'pre-compaction', max_results: 99 })
     expect(oversized.isError).toBe(false)
-    expect(resultText(oversized)).toContain('returned 4')
+    expect(resultText(oversized)).toContain('Recalled 2 matching event(s)')
   }, 30_000)
 
   it('ranks hits by term density, newest first on ties', async () => {
@@ -262,9 +258,8 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     expect(result.isError).toBe(false)
     const text = resultText(result)
     // Denser hit (two occurrences) wins the single slot.
-    expect(text).toContain('>> #0 user/message [current]')
-    expect(text).toContain('  #1 user/message [current]')
-    expect(text).not.toContain('>> #1 user/message')
+    expect(text).toContain('#0 user/message [current]')
+    expect(text).not.toContain('#1 user/message')
   }, 30_000)
 
   it('recruits CJK partial matches via n-grams', async () => {
@@ -279,8 +274,8 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     const text = resultText(result)
     // seq 0 lacks the full term but contains the '历史' gram — recruited as a hit.
     expect(text).toContain('Recalled 2 matching event(s)')
-    expect(text).toContain('>> #0 user/message [current]')
-    expect(text).toContain('>> #1 user/message [current]')
+    expect(text).toContain('#0 user/message [current]')
+    expect(text).toContain('#1 user/message [current]')
   }, 30_000)
 
   it('truncates long event texts around the first match', async () => {
