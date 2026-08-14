@@ -42,14 +42,16 @@ Arguments:
 | arg | meaning |
 |---|---|
 | `query` | **required**: space-separated keywords; an event must contain every keyword (case-insensitive) |
-| `max_results` | optional: max events to return (1-10, default 10, internal cap 10) |
+| `max_results` | optional: max matching events (hits) to return (1-10, default 10, internal cap 10) |
 | `surfaces` | optional: only events of these surface classifications (`current` / `shadowed` / `log-only`); all surfaces when omitted |
+
+Each hit carries up to `contextEvents` neighbors on both sides: hit lines are prefixed `>>`, context lines are indented (deduplicated, ordered by seq).
 
 Design: read-only access to the CALLING agent's OWN session log (no cross-session access); events of the current step are always excluded; a fork inherits its parent's completed-turn log prefix, so it recalls parent history too.
 
 ## Configuration
 
-`maxResults` (cap on returned events per call) and `maxCharsPerEvent` (cap on characters of each event's text) are required deployment config, adjustable in the mount row's `config`.
+`maxResults` (hit cap per call), `maxCharsPerEvent` (per-event text cap, default 20000) and `contextEvents` (how many neighbors each hit carries on each side, default 2) are required deployment config, adjustable in the mount row's `config`.
 
 ## Development
 
