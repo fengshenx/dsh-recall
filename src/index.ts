@@ -330,6 +330,21 @@ function runRecall(
   }
   const eligible = events.filter(event => event.seq < currentStepStart)
 
+  // recall's own results are projections of other events — matching them
+  // would echo recalled content back into later recalls (and the log). The
+  // paired tool/call keeps the query as a fact; only the results are
+  // excluded. tool/result carries no name, so pair by callId.
+  const recallCallIds = new Set<string>()
+  for (const event of events) {
+    if (event.type === 'tool/call' && event.data.name === 'recall') {
+      recallCallIds.add(event.data.callId)
+    }
+  }
+  const extractText = (event: SessionEvent): string =>
+    event.type === 'tool/result' && recallCallIds.has(event.data.message.source.callId)
+      ? ''
+      : extractSessionEventText(event)
+
   const rawQuery = args.query ?? ''
   if (rawQuery.length > MAX_QUERY_LENGTH) {
     throw new Error(`recall: query must be at most ${MAX_QUERY_LENGTH} characters`)
@@ -350,7 +365,7 @@ function runRecall(
   const scored: { event: SessionEvent; score: number }[] = []
   for (const event of eligible) {
     if (surfaceFilter !== undefined && !surfaceFilter.includes(surfaceOf(event))) continue
-    const score = scoreEvent(fold(extractSessionEventText(event)), query)
+    const score = scoreEvent(fold(extractText(event)), query)
     if (score <= 0) continue
     scored.push({ event, score })
   }
@@ -368,7 +383,7 @@ function runRecall(
   }
   // Ranked hits, each truncated to the match window when longer than the cap.
   const recalled = hits.map(event => {
-    const text = extractSessionEventText(event)
+    const text = extractText(event)
     return {
       seq: event.seq,
       type: event.type,

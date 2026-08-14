@@ -307,6 +307,28 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
     expect(text.length).toBeLessThan(2600)
   }, 30_000)
 
+  it('recall results do not echo themselves, call arguments remain facts', async () => {
+    const ctx = await boot()
+    const session = Session.create(SessionId('recall-echo'), [
+      { type: 'tool/call', seq: 0, time: 1, data: { turn: 1, step: 1, callId: CallId('echo-0'), name: 'recall', arguments: JSON.stringify({ query: 'other' }) } },
+      { type: 'tool/result', seq: 1, time: 2, data: { turn: 1, step: 1, message: { role: 'user', id: MessageId('er-0'), content: [{ type: 'tool-result', toolCallId: CallId('echo-0'), content: [{ type: 'text', text: 'Recalled 1 matching event(s): needle here' }], isError: false }], source: { kind: 'tool', callId: CallId('echo-0') } } }, surfaceOp: 'append' },
+      { type: 'user/message', seq: 2, time: 3, data: { role: 'user', id: MessageId('e-0'), source: { kind: 'user' }, content: [{ type: 'text', text: 'needle in real content' }] }, surfaceOp: 'append' },
+    ])
+    const owner = agent(ctx, session)
+    // 'needle' appears in the self-result AND in real content: only the real event hits.
+    const result = await recall(ctx, owner, { query: 'needle' })
+    expect(result.isError).toBe(false)
+    const text = resultText(result)
+    expect(text).toContain('Recalled 1 matching event(s)')
+    expect(text).toContain('#2 user/message')
+    expect(text).not.toContain('#0 tool/call')
+    expect(text).not.toContain('#1 tool/result')
+    // The self call's own query is a fact: it matches via its arguments.
+    const byQuery = await recall(ctx, owner, { query: 'other' })
+    expect(byQuery.isError).toBe(false)
+    expect(resultText(byQuery)).toContain('#0 tool/call')
+  }, 30_000)
+
   it('tells the agent when the session never compacted', async () => {
     const ctx = await boot()
     const session = Session.create(SessionId('recall-fresh'), [

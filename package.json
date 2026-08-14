@@ -1,6 +1,6 @@
 {
   "name": "dsh-recall",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "DSH plugin: `recall` — search and read the calling agent's own session log, including events shadowed by compaction",
   "type": "module",
   "repository": {

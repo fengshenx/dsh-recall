@@ -50,6 +50,7 @@ Hits are listed in relevance order: each hit gets a title line (`#seq type [surf
 - **Relevance ranking**: rare (long) terms and higher density rank first, newest wins ties; CJK terms get 2-4 char n-gram fallback matching, so rewritten long Chinese phrases still recall
 - **Long-event truncation**: events longer than ~2400 chars keep only the content around the first match (centered on the match), with omitted-character markers
 - **Matching normalization**: NFKC + lowercase; an NFKC-stable query (no full-width/combining forms) scans with plain lowercase instead (full-width variants in event text, e.g. ＡＢＣ, then no longer match `abc`)
+- **Echo suppression**: recall's own tool/result rows do not match (they are projections of other events), while its call arguments (the query) remain recallable facts
 - `query` is limited to 200 characters; longer queries error
 - A session that never compacted returns guidance instead of an empty result list (the early content is in the current context)
 
