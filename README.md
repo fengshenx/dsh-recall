@@ -60,14 +60,6 @@ pnpm test         # vitest（含真实 Loader 组合测试）
 npm pack --dry-run  # 检查发布内容
 ```
 
-## 发布
-
-安装走 npm 源，发布是用户可安装的前提：
-
-```sh
-npm publish
-```
-
 ## 工作原理简述
 
 - 插件是普通 npm 包：`dsh.bundle.patch` 声明（`cordis.patch.yml`）+ 标准插件行。

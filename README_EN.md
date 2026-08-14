@@ -60,14 +60,6 @@ pnpm test         # vitest, incl. a real Loader composition test
 npm pack --dry-run
 ```
 
-## Publishing
-
-The one-command install pulls from npm, so publishing is a prerequisite for users:
-
-```sh
-npm publish
-```
-
 ## How it works
 
 - The plugin is a plain npm package declaring `dsh.bundle.patch` (`cordis.patch.yml`) plus a standard plugin row.
