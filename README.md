@@ -2,9 +2,9 @@
 
 English: [README_EN.md](./README_EN.md)
 
-DSH 插件：为模型提供 **`recall` 工具**——搜索并读取**调用代理自己的会话日志**，包括被压缩（compaction）遮蔽的事件。
+DSH 插件：为模型提供 **`remind` 工具**——搜索并读取**调用代理自己的会话日志**，包括被压缩（compaction）遮蔽的事件。
 
-压缩从不删除事件：它把一段可见历史替换成摘要检查点（checkpoint），被替换的事件仍留在持久日志中，分类为 `shadowed`。`recall` 就是模型回到那段内容的正式途径——`surfaces: ["shadowed"]` 逐字取回压缩前内容，`seq` 读取任意精确事件。
+压缩从不删除事件：它把一段可见历史替换成摘要检查点（checkpoint），被替换的事件仍留在持久日志中，分类为 `shadowed`。`remind` 就是模型回到那段内容的正式途径——`surfaces: ["shadowed"]` 逐字取回压缩前内容，`seq` 读取任意精确事件。
 
 ## 安装
 
@@ -16,7 +16,7 @@ dsh plugin --profile web add dsh-remind
 
 `dsh plugin add` 会在 profile 目录安装 npm 包，并因包内声明了 `dsh.bundle.patch` 而自动把插件注册进 `dsh.profile.bundles`——**下次启动自动挂载，无需手动改任何配置文件**。
 
-`recall` 是 host 侧工具，挂载需要重启一次：
+`remind` 是 host 侧工具，挂载需要重启一次：
 
 ```sh
 # 重启 dsh web（视你的启动方式而定）
@@ -31,10 +31,10 @@ dsh plugin --profile web remove dsh-remind
 
 ## 使用
 
-重启后，模型（如我）的工具列表里会出现 `recall`。示例调用：
+重启后，模型（如我）的工具列表里会出现 `remind`。示例调用：
 
 ```
-recall { query: "Agent/Sub Agent有能力回忆 压缩", max_results: 10 }
+remind { query: "Agent/Sub Agent有能力回忆 压缩", max_results: 10 }
 ```
 
 返回压缩前被遮蔽的原始消息，逐字可读。参数：
@@ -50,7 +50,7 @@ recall { query: "Agent/Sub Agent有能力回忆 压缩", max_results: 10 }
 - **相关度排序**：长词（稀有）与出现密度高的命中靠前，同分时新的优先；中文长词按 2-4 字片段兜底匹配——压缩改写导致长句原文不连续时仍能召回
 - **长事件截断**：超过约 2400 字符的事件只保留命中位置附近的内容（以命中为中心各取一半），超出部分标注「…(省略N字符)…」
 - **匹配归一化**：NFKC + 小写；查询不含全角/组合字符时走纯小写快路径（此时事件里的全角变体如 ＡＢＣ 不再匹配 `abc`）
-- **回声抑制**：recall 自己的 tool/result 不参与匹配（它只是其他事件的投影），但它的调用参数（query）仍作为事实可回忆
+- **回声抑制**：remind 自己的 tool/result 不参与匹配（它只是其他事件的投影），但它的调用参数（query）仍作为事实可回忆
 - `query` 最长 200 字符，超出会报错
 - 会话从未压缩时，搜索返回提示而非结果列表（早期内容都在当前上下文里）
 
@@ -79,7 +79,7 @@ dsh plugin --profile web add /Users/<you>/<path>/dsh-remind
 
 它会自动完成两件事：把包加入 profile 的 `dsh.profile.bundles`，并在启动时应用插件自带的 `cordis.patch.yml`。之后：
 
-1. 如果 profile 的 `cordis.patch.yml` 里有旧的 manual 挂载行（同一 `tool-recall` id），删掉它，否则重复插入冲突；
+1. 如果 profile 的 `cordis.patch.yml` 里有旧的 manual 挂载行（同一 `tool-remind` id），删掉它，否则重复插入冲突；
 2. 重启 web server，`dsh --profile web --dump-config` 应显示 `# == dsh-remind` 段；
 3. 每次改 `src/` 后 `pnpm build` 再重启 web server 生效（无需重新 `plugin add`）。
 
@@ -87,7 +87,7 @@ dsh plugin --profile web add /Users/<you>/<path>/dsh-remind
 
 - 插件是普通 npm 包：`dsh.bundle.patch` 声明（`cordis.patch.yml`）+ 标准插件行。
 - `dsh plugin add` 的 bundle 协调（DSH `apps/cli/src/plugin.ts`）：安装后检查包是否声明 `dsh.bundle`，是则追加进 profile 的 `dsh.profile.bundles`；启动时作为 patch 层自动合并。
-- 运行时：`recall` 通过 `exec.agent.session.events` 读取调用者自己的完整事件日志，surface 分类复用 `@deepseek-ai/dsh-session-query` 的 `buildSessionEventRecords`（与官方 session-query 工具同一套词汇）。
+- 运行时：`remind` 通过 `exec.agent.session.events` 读取调用者自己的完整事件日志，surface 分类复用 `@deepseek-ai/dsh-session-query` 的 `buildSessionEventRecords`（与官方 session-query 工具同一套词汇）。
 
 ## License
 

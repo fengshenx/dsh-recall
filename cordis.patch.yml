@@ -11,7 +11,7 @@
 # plugin row) exactly like a manual cordis.patch.yml mount line. No profile
 # file edits needed — one command installs and mounts.
 - insert:
-    - id: tool-recall
+    - id: tool-remind
       name: 'dsh-remind'
       config:
         maxResults: 25

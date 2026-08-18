@@ -1,7 +1,7 @@
 {
   "name": "dsh-remind",
   "version": "0.3.4",
-  "description": "DSH plugin: `recall` — search and read the calling agent's own session log, including events shadowed by compaction",
+  "description": "DSH plugin: `remind` — search and read the calling agent's own session log, including events shadowed by compaction",
   "type": "module",
   "repository": {
     "type": "git",

@@ -1,5 +1,5 @@
 /**
- * Model-facing recall tool: search and read the calling agent's OWN session
+ * Model-facing remind tool: search and read the calling agent's OWN session
  * log — the complete durable event history, including events shadowed by
  * compaction. Compaction never deletes events: it replaces a visible surface
  * range with a summary checkpoint, and the replaced events stay in the log
@@ -8,7 +8,7 @@
  * Scope is deliberately single-session and read-only: it reads
  * `exec.agent.session.events` (the same append-only log everything else uses)
  * and never appends. A fork child's session carries its parent's completed-turn
- * log prefix, so a fork recalls parent history too. There is no cross-session
+ * log prefix, so a fork sees parent history too. There is no cross-session
  * access and no authorization surface — the tool can only ever see the caller's
  * own log.
  * @module dsh-remind
@@ -24,10 +24,10 @@ import {
   type SessionEventSurface,
 } from '@deepseek-ai/dsh-session-query'
 
-export const name = 'tool-recall'
+export const name = 'tool-remind'
 export const inject = ['tools']
 
-/** Deployment-chosen recall bounds. */
+/** Deployment-chosen remind bounds. */
 export interface Config {
   /**
    * Hard cap on matching events (hits) returned per call; deployments may
@@ -41,7 +41,7 @@ export interface Config {
   maxCharsPerEvent: number
 }
 
-/** Schemastery configuration for the recall tool consumer. */
+/** Schemastery configuration for the remind tool consumer. */
 export const Config: z<Config> = z.object({
   maxResults: z.natural().min(1).required(),
   maxCharsPerEvent: z.natural().min(1).required(),
@@ -199,13 +199,13 @@ const DESCRIPTION = '按关键词回忆当前会话的早期对话——主要�
   + '\n\n`max_results` 可选（默认 10，内部上限 10，指命中条数）；可选 `surfaces`（shadowed = 被压缩替换的内容）。只作用于调用者自己的会话。'
 
 /**
- * Register the `recall` tool on `ctx.tools`.
+ * Register the `remind` tool on `ctx.tools`.
  * @param ctx - registrant context carrying the tool registry.
- * @param config - deployment's recall bounds.
+ * @param config - deployment's remind bounds.
  */
 export function apply(ctx: Context, config: Config): void {
   ctx.tools.register(defineTool({
-    name: 'recall',
+    name: 'remind',
     description: DESCRIPTION,
     parameters: {
       query: {
@@ -271,17 +271,17 @@ export function apply(ctx: Context, config: Config): void {
     execute(args, exec) {
       if (!exec.agent) {
         // The log belongs to the calling agent session; a non-agent caller has
-        // no session to recall. Reject rather than silently read nothing.
-        throw new Error('recall requires an owning agent session')
+        // no session to search. Reject rather than silently read nothing.
+        throw new Error('remind requires an owning agent session')
       }
-      return Promise.resolve(runRecall(exec.agent.session, args, config))
+      return Promise.resolve(runRemind(exec.agent.session, args, config))
     },
-    presentCall: args => ({ card: 'generic', title: 'Recall session history', kind: 'other', rawInput: args }),
+    presentCall: args => ({ card: 'generic', title: '回忆中', kind: 'other', rawInput: args }),
   }))
 }
 
-/** Recall arguments as the schema boundary delivers them. */
-interface RecallArgs {
+/** Remind arguments as the schema boundary delivers them. */
+interface RemindArgs {
   /** Multi-keyword search phrase; an event must contain every keyword. */
   query?: string
   /** Optional cap on matching events (hits) (1-10, default 10). */
@@ -290,8 +290,8 @@ interface RecallArgs {
   surfaces?: SessionEventSurface[]
 }
 
-/** A recalled event as returned to the model. */
-interface RecallEvent {
+/** A single search hit as returned to the model. */
+interface RemindEvent {
   seq: number
   type: string
   surface: SessionEventSurface
@@ -300,17 +300,17 @@ interface RecallEvent {
 }
 
 /**
- * Execute one recall over the calling agent's own session log.
+ * Execute one remind search over the calling agent's own session log.
  * @param session - the calling agent's session (log source and identity).
- * @param args - validated recall arguments.
+ * @param args - validated remind arguments.
  * @param config - deployment bounds (hit cap, per-event text cap).
  * @returns hit count, the ranked hit list, and optional guidance.
  */
-function runRecall(
+function runRemind(
   session: Session,
-  args: RecallArgs,
+  args: RemindArgs,
   config: Config,
-): { count: number; events: RecallEvent[]; notice?: string } {
+): { count: number; events: RemindEvent[]; notice?: string } {
   const events = session.events
 
   // Surface classification folds the WHOLE log (a replacement range can only
@@ -322,7 +322,7 @@ function runRecall(
     surfaceBySeq.get(event.seq) ?? 'log-only'
 
   // The current step's events are the model's own in-flight output — already
-  // in context, and not history to recall. Exclude everything from the last
+  // in context, and not history to search. Exclude everything from the last
   // step/start onward, mirroring session-query's current-session cap.
   let currentStepStart = Infinity
   for (const event of events) {
@@ -330,24 +330,24 @@ function runRecall(
   }
   const eligible = events.filter(event => event.seq < currentStepStart)
 
-  // recall's own results are projections of other events — matching them
-  // would echo recalled content back into later recalls (and the log). The
-  // paired tool/call keeps the query as a fact; only the results are
+  // remind's own results are projections of other events — matching them
+  // would echo reminded content back into later remind calls (and the log).
+  // The paired tool/call keeps the query as a fact; only the results are
   // excluded. tool/result carries no name, so pair by callId.
-  const recallCallIds = new Set<string>()
+  const remindCallIds = new Set<string>()
   for (const event of events) {
-    if (event.type === 'tool/call' && event.data.name === 'recall') {
-      recallCallIds.add(event.data.callId)
+    if (event.type === 'tool/call' && event.data.name === 'remind') {
+      remindCallIds.add(event.data.callId)
     }
   }
   const extractText = (event: SessionEvent): string =>
-    event.type === 'tool/result' && recallCallIds.has(event.data.message.source.callId)
+    event.type === 'tool/result' && remindCallIds.has(event.data.message.source.callId)
       ? ''
       : extractSessionEventText(event)
 
   const rawQuery = args.query ?? ''
   if (rawQuery.length > MAX_QUERY_LENGTH) {
-    throw new Error(`recall: query must be at most ${MAX_QUERY_LENGTH} characters`)
+    throw new Error(`remind: query must be at most ${MAX_QUERY_LENGTH} characters`)
   }
   const query = parseQuery(rawQuery)
   if (query.terms.length === 0) {
@@ -382,7 +382,7 @@ function runRecall(
     return notice === undefined ? { count: 0, events: [] } : { count: 0, events: [], notice }
   }
   // Ranked hits, each truncated to the match window when longer than the cap.
-  const recalled = hits.map(event => {
+  const reminded = hits.map(event => {
     const text = extractText(event)
     return {
       seq: event.seq,
@@ -392,5 +392,5 @@ function runRecall(
       text: truncateAroundMatch(text, query, config.maxCharsPerEvent, fold),
     }
   })
-  return { count: hits.length, events: recalled }
+  return { count: hits.length, events: reminded }
 }

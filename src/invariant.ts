@@ -1,5 +1,5 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-tool-recall`.
+ * Package-owned invariant companion for `@deepseek-ai/dsh-tool-remind`.
  * @module dsh-remind/invariant
  */
 
@@ -10,12 +10,12 @@ import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 const PACKAGE_NAME = 'dsh-remind'
 
 /** Cordis companion plugin name. */
-export const name = 'tool-recall-invariant'
+export const name = 'tool-remind-invariant'
 /** Service required before the companion can reserve package ownership. */
 export const inject = ['invariants']
 
 /**
- * No runtime invariant: the recall tool is read-only — it never appends to the
+ * No runtime invariant: the remind tool is read-only — it never appends to the
  * log, so it owns no durable package-local event stream to validate; the
  * read-only contract is enforced by the tool itself rejecting every write path.
  */
