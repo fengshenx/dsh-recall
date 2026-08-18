@@ -1,4 +1,4 @@
-# dsh-recall
+# dsh-remind
 
 English: [README_EN.md](./README_EN.md)
 
@@ -11,7 +11,7 @@ DSH 插件：为模型提供 **`recall` 工具**——搜索并读取**调用代
 前置：DSH（`dsh web` 可正常运行）、Node.js ≥ 20、pnpm ≥ 10（`dsh plugin` 命令需要）。插件发布在 npm，一条命令安装并自动挂载：
 
 ```sh
-dsh plugin --profile web add dsh-recall
+dsh plugin --profile web add dsh-remind
 ```
 
 `dsh plugin add` 会在 profile 目录安装 npm 包，并因包内声明了 `dsh.bundle.patch` 而自动把插件注册进 `dsh.profile.bundles`——**下次启动自动挂载，无需手动改任何配置文件**。
@@ -26,7 +26,7 @@ dsh plugin --profile web add dsh-recall
 ### 卸载
 
 ```sh
-dsh plugin --profile web remove dsh-recall
+dsh plugin --profile web remove dsh-remind
 ```
 
 ## 使用
@@ -74,13 +74,13 @@ npm pack --dry-run  # 检查发布内容
 `dsh plugin` 支持本地路径，安装为 `link:` 符号链接（源码实时指向插件目录）：
 
 ```sh
-dsh plugin --profile web add /Users/<you>/<path>/dsh-recall
+dsh plugin --profile web add /Users/<you>/<path>/dsh-remind
 ```
 
 它会自动完成两件事：把包加入 profile 的 `dsh.profile.bundles`，并在启动时应用插件自带的 `cordis.patch.yml`。之后：
 
 1. 如果 profile 的 `cordis.patch.yml` 里有旧的 manual 挂载行（同一 `tool-recall` id），删掉它，否则重复插入冲突；
-2. 重启 web server，`dsh --profile web --dump-config` 应显示 `# == dsh-recall` 段；
+2. 重启 web server，`dsh --profile web --dump-config` 应显示 `# == dsh-remind` 段；
 3. 每次改 `src/` 后 `pnpm build` 再重启 web server 生效（无需重新 `plugin add`）。
 
 ## 工作原理简述

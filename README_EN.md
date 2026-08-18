@@ -1,4 +1,4 @@
-# dsh-recall
+# dsh-remind
 
 中文说明：[README.md](./README.md)
 
@@ -11,7 +11,7 @@ Compaction never deletes events: it replaces a visible history range with a summ
 Prerequisites: DSH (`dsh web` works), Node.js ≥ 20, pnpm ≥ 10 (needed by the `dsh plugin` command). The plugin is published on npm — one command installs and mounts it:
 
 ```sh
-dsh plugin --profile web add dsh-recall
+dsh plugin --profile web add dsh-remind
 ```
 
 `dsh plugin add` installs the npm package into the profile directory and — because the package declares `dsh.bundle.patch` — automatically registers it into `dsh.profile.bundles`. It mounts automatically on next start. **No config file edits.**
@@ -26,7 +26,7 @@ dsh plugin --profile web add dsh-recall
 ### Uninstall
 
 ```sh
-dsh plugin --profile web remove dsh-recall
+dsh plugin --profile web remove dsh-remind
 ```
 
 ## Usage
@@ -74,13 +74,13 @@ npm pack --dry-run
 `dsh plugin` accepts local paths and installs them as `link:` symlinks (source stays live):
 
 ```sh
-dsh plugin --profile web add /Users/<you>/<path>/dsh-recall
+dsh plugin --profile web add /Users/<you>/<path>/dsh-remind
 ```
 
 It does both steps automatically: appends the package to the profile's `dsh.profile.bundles` and applies the package's own `cordis.patch.yml` at boot. Afterwards:
 
 1. Remove any old manual mount row for the same `tool-recall` id from the profile's `cordis.patch.yml` to avoid a duplicate insert;
-2. Restart the web server; `dsh --profile web --dump-config` should show a `# == dsh-recall` section;
+2. Restart the web server; `dsh --profile web --dump-config` should show a `# == dsh-remind` section;
 3. After each `src/` change, run `pnpm build` and restart the web server (no need to re-run `plugin add`).
 
 ## How it works

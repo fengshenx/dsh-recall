@@ -120,13 +120,13 @@ function seededSession(): Session {
 }
 
 async function boot(overrides: { maxCharsPerEvent?: number } = {}): Promise<Context> {
-  root = await mkdtemp(join(tmpdir(), 'dsh-recall-loader-'))
+  root = await mkdtemp(join(tmpdir(), 'dsh-remind-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-agent'",
     "- name: '@deepseek-ai/dsh-system-prompt'",
     "- name: '@deepseek-ai/dsh-tools'",
-    "- name: 'dsh-recall'",
+    "- name: 'dsh-remind'",
     '  config:',
     '    maxResults: 10',
     `    maxCharsPerEvent: ${overrides.maxCharsPerEvent ?? 200}`,
@@ -142,7 +142,7 @@ async function boot(overrides: { maxCharsPerEvent?: number } = {}): Promise<Cont
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
-    ['dsh-recall', ToolRecall],
+    ['dsh-remind', ToolRecall],
   ])
   ctx.loader.internal = {
     version: 'v2',
@@ -377,13 +377,13 @@ describe('tool-recall real Loader composition through cordis.yml', () => {
 
 /** Boot without the config block to prove the bounds are required. */
 async function bootWithoutConfig(): Promise<Context> {
-  root = await mkdtemp(join(tmpdir(), 'dsh-recall-loader-'))
+  root = await mkdtemp(join(tmpdir(), 'dsh-remind-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-agent'",
     "- name: '@deepseek-ai/dsh-system-prompt'",
     "- name: '@deepseek-ai/dsh-tools'",
-    "- name: 'dsh-recall'",
+    "- name: 'dsh-remind'",
     '',
   ].join('\n'))
 
@@ -396,7 +396,7 @@ async function bootWithoutConfig(): Promise<Context> {
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
-    ['dsh-recall', ToolRecall],
+    ['dsh-remind', ToolRecall],
   ])
   ctx.loader.internal = {
     version: 'v2',

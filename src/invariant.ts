@@ -1,13 +1,13 @@
 /**
  * Package-owned invariant companion for `@deepseek-ai/dsh-tool-recall`.
- * @module dsh-recall/invariant
+ * @module dsh-remind/invariant
  */
 
 /* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = 'dsh-recall'
+const PACKAGE_NAME = 'dsh-remind'
 
 /** Cordis companion plugin name. */
 export const name = 'tool-recall-invariant'

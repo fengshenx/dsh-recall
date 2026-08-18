@@ -11,7 +11,7 @@
  * log prefix, so a fork recalls parent history too. There is no cross-session
  * access and no authorization surface — the tool can only ever see the caller's
  * own log.
- * @module dsh-recall
+ * @module dsh-remind
  */
 
 import type { Context } from '@deepseek-ai/cordis'
